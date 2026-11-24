@@ -53,13 +53,13 @@ jobs:
             throw "Missing application EXE"
           }
 
-          if (!(Test-Path "$appDir\_tcl_data\init.tcl")) {
-            throw "Missing Tcl init.tcl"
-          }
+          if (!(Test-Path "$appDir\_internal\_tcl_data\init.tcl")) {
+  throw "Missing Tcl init.tcl"
+}
 
-          if (!(Test-Path "$appDir\_tk_data\tk.tcl")) {
-            throw "Missing Tk data"
-          }
+if (!(Test-Path "$appDir\_internal\_tk_data\tk.tcl")) {
+  throw "Missing Tk data"
+}
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
