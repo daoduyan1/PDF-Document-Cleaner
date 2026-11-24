@@ -12,7 +12,6 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +20,6 @@ jobs:
           python-version: "3.12"
 
       - name: Install Tesseract OCR
-        shell: pwsh
         run: choco install tesseract --yes --no-progress
 
       - name: Install dependencies
@@ -29,60 +27,38 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
 
-      - name: Collect Tcl Tk libraries
-        shell: pwsh
-        run: |
-          $pythonRoot = python -c "import sys; print(sys.base_prefix)"
-          $tclSource = Join-Path $pythonRoot "tcl\tcl8.6"
-          $tkSource = Join-Path $pythonRoot "tcl\tk8.6"
-
-          if (!(Test-Path "$tclSource\init.tcl")) {
-            throw "Missing Tcl init.tcl"
-          }
-
-          if (!(Test-Path "$tkSource\pkgIndex.tcl")) {
-            throw "Missing Tk pkgIndex.tcl"
-          }
-
-          New-Item -ItemType Directory -Force -Path "_tcl_data" | Out-Null
-          New-Item -ItemType Directory -Force -Path "_tk_data" | Out-Null
-
-          Copy-Item "$tclSource\*" "_tcl_data" -Recurse -Force
-          Copy-Item "$tkSource\*" "_tk_data" -Recurse -Force
-
-          Write-Host "Tcl and Tk libraries collected successfully."
-
-      - name: Collect Tesseract OCR
+      - name: Collect Tesseract
         shell: pwsh
         run: |
           $tess = "C:\Program Files\Tesseract-OCR"
-
-          if (!(Test-Path "$tess\tesseract.exe")) {
-            throw "Missing Tesseract"
-          }
-
           New-Item -ItemType Directory -Force -Path "tesseract\tessdata" | Out-Null
-
           Copy-Item "$tess\tesseract.exe" "tesseract\"
           Get-ChildItem "$tess" -Filter "*.dll" | ForEach-Object {
             Copy-Item $_.FullName "tesseract\"
           }
-
           Copy-Item "$tess\tessdata\osd.traineddata" "tesseract\tessdata\"
 
-      - name: Build standalone EXE
+      - name: Build application
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed `
+          python -m PyInstaller --noconfirm --clean --windowed --onedir `
             --name PDF_Document_Cleaner `
             --collect-all fitz `
-            --add-data "_tcl_data;_tcl_data" `
-            --add-data "_tk_data;_tk_data" `
             --add-data "tesseract;tesseract" `
             pdf_document_cleaner.py
 
-          if (!(Test-Path "dist\PDF_Document_Cleaner.exe")) {
-            throw "EXE build failed"
+          $appDir = "dist\PDF_Document_Cleaner"
+
+          if (!(Test-Path "$appDir\PDF_Document_Cleaner.exe")) {
+            throw "Missing application EXE"
+          }
+
+          if (!(Test-Path "$appDir\_tcl_data\init.tcl")) {
+            throw "Missing Tcl init.tcl"
+          }
+
+          if (!(Test-Path "$appDir\_tk_data\tk.tcl")) {
+            throw "Missing Tk data"
           }
 
       - name: Install Inno Setup
@@ -94,7 +70,7 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
 
           if (!(Test-Path "dist\PDF_Document_Cleaner_Setup.exe")) {
-            throw "Installer build failed"
+            throw "Missing installer"
           }
 
       - name: Upload installer
