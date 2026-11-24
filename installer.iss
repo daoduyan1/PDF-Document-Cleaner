@@ -31,7 +31,7 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 
 [Files]
-Source: "dist\PDF_Document_Cleaner.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\PDF_Document_Cleaner\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\PDF Document Cleaner"; Filename: "{app}\PDF_Document_Cleaner.exe"
