@@ -4,7 +4,8 @@ name: Build Windows installer
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,54 +13,51 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Tesseract OCR
         run: choco install tesseract --yes --no-progress
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
 
-      - name: Collect Tesseract
+      - name: Collect Tesseract files
         shell: pwsh
         run: |
           $tess = "C:\Program Files\Tesseract-OCR"
+
+          if (!(Test-Path "$tess\tesseract.exe")) {
+            throw "Tesseract not found"
+          }
+
           New-Item -ItemType Directory -Force -Path "tesseract\tessdata" | Out-Null
+
           Copy-Item "$tess\tesseract.exe" "tesseract\"
+
           Get-ChildItem "$tess" -Filter "*.dll" | ForEach-Object {
             Copy-Item $_.FullName "tesseract\"
           }
+
           Copy-Item "$tess\tessdata\osd.traineddata" "tesseract\tessdata\"
 
       - name: Build application
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir `
-            --name PDF_Document_Cleaner `
-            --collect-all fitz `
-            --add-data "tesseract;tesseract" `
-            pdf_document_cleaner.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name PDF_Document_Cleaner --collect-all fitz --add-data "tesseract;tesseract" pdf_document_cleaner.py
 
-          $appDir = "dist\PDF_Document_Cleaner"
-
-          if (!(Test-Path "$appDir\PDF_Document_Cleaner.exe")) {
-            throw "Missing application EXE"
+          if (!(Test-Path "dist\PDF_Document_Cleaner\PDF_Document_Cleaner.exe")) {
+            throw "Application EXE not found"
           }
-
-          if (!(Test-Path "$appDir\_internal\_tcl_data\init.tcl")) {
-  throw "Missing Tcl init.tcl"
-}
-
-if (!(Test-Path "$appDir\_internal\_tk_data\tk.tcl")) {
-  throw "Missing Tk data"
-}
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
@@ -70,7 +68,7 @@ if (!(Test-Path "$appDir\_internal\_tk_data\tk.tcl")) {
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
 
           if (!(Test-Path "dist\PDF_Document_Cleaner_Setup.exe")) {
-            throw "Missing installer"
+            throw "Installer not found"
           }
 
       - name: Upload installer
