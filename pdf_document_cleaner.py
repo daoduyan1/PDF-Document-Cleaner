@@ -9,7 +9,7 @@ import fitz
 from PIL import Image, ImageChops, ImageFilter
 import pytesseract
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.2"
 APP_AUTHOR = "Đào Duy An"
 APP_AUTHOR_URL = "https://daoduyan.com"
 APP_PUBLISHER = "HMDS"
@@ -97,39 +97,122 @@ def is_learned_blank(page, patterns=None):
     return bool(legacy) and any(hash_distance(dhash(page), x)<=3 for x in legacy)
 
 
-def crossed_page(page):
-    # Detect two long opposing diagonal lines crossing near the page centre.
-    im = page_image(page, 1.0).convert("L")
-    im.thumbnail((650,850))
-    arr = np.asarray(im); h,w = arr.shape
+def straight_crossed_page(page):
+    # Global Hough voting can join interrupted strokes across printed text.
+    im = page_image(page, 1.5)
+    im.thumbnail((850,1100))
+    rgb = np.asarray(im)
+    h,w = rgb.shape[:2]
     if min(h,w)<40: return False
-    edges = cv2.Canny(arr, 35, 100)
-    diag = (w*w+h*h)**.5
-    lines = cv2.HoughLinesP(edges,1,np.pi/180,threshold=max(30,int(diag*.09)),minLineLength=int(diag*.38),maxLineGap=int(diag*.035))
-    if lines is None: return False
-    pos,neg=[],[]
-    for x1,y1,x2,y2 in lines[:,0]:
-        dx=int(x2)-int(x1); dy=int(y2)-int(y1)
-        if abs(dx)<w*.30 or abs(dy)<h*.30: continue
-        m=dy/dx; c=y1-m*x1
-        (pos if m>0 else neg).append((m,c,min(x1,x2),max(x1,x2)))
-    for m,c,l,r in pos:
-        for n,d,ll,rr in neg:
-            x=(d-c)/(m-n); y=m*x+c
-            if .25*w<=x<=.75*w and .25*h<=y<=.75*h and l<=x<=r and ll<=x<=rr: return True
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    ink = cv2.adaptiveThreshold(gray,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,31,9)
+    color = rgb.max(axis=2).astype(np.int16)-rgb.min(axis=2).astype(np.int16)
+    colored = ((color>30)&(rgb.min(axis=2)<220)).astype(np.uint8)*255
+    diag = np.hypot(w,h)
+    for mask in (colored, ink):
+        if not np.any(mask): continue
+        # Restrict Hough candidates to diagonals, ignoring horizontal text/rules.
+        lines = cv2.HoughLines(mask,1,np.pi/360,max(30,int(min(w,h)*.09)))
+        if lines is None: continue
+        near = cv2.dilate(mask,np.ones((7,7),np.uint8))
+        pos,neg=[],[]
+        for rho,theta in lines[:600,0]:
+            st,ct=np.sin(theta),np.cos(theta)
+            if abs(st)<.20 or abs(ct)<.20: continue
+            m=-ct/st; c=rho/st
+            if not .30 < abs(m)*w/h < 3.0: continue
+            xs=np.linspace(.03*w,.97*w,160); ys=m*xs+c
+            valid=(ys>=.03*h)&(ys<.97*h)
+            xs=xs[valid].astype(int); ys=ys[valid].astype(int)
+            if len(xs)<50: continue
+            hit=near[ys,xs]>0
+            if hit.mean()<.46: continue
+            xx,yy=xs[hit],ys[hit]
+            if np.ptp(xx)<.40*w or np.ptp(yy)<.40*h: continue
+            if sum(np.any(part) for part in np.array_split(hit,8))<7: continue
+            target=pos if m>0 else neg
+            target.append((m,c,xx.min(),xx.max()))
+            if len(pos)>=30 and len(neg)>=30: break
+        for m,c,l,r in pos:
+            for n,d,ll,rr in neg:
+                x=(d-c)/(m-n); y=m*x+c
+                if .12*w<=x<=.88*w and .12*h<=y<=.88*h and l<=x<=r and ll<=x<=rr: return True
     return False
 
 
+def curved_crossed_page(page):
+    # Faint curved cancellation strokes: local background subtraction, remove
+    # horizontal rules, then look for a thin connected hourglass-shaped trace.
+    im = page_image(page, 1.5)
+    im.thumbnail((750, 1050))
+    gray = cv2.cvtColor(np.asarray(im), cv2.COLOR_RGB2GRAY)
+    h, w = gray.shape
+    if min(h,w) < 100: return False
+    bg = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, np.ones((15,15),np.uint8))
+    delta = cv2.subtract(bg,gray)
+    for threshold in (8, 5):
+        mask = (delta >= threshold).astype(np.uint8)*255
+        horizontal = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((1,max(25,w//16)),np.uint8))
+        mask = cv2.subtract(mask,horizontal)
+        mask = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,np.ones((5,5),np.uint8))
+        mask[:int(.035*h)] = 0; mask[int(.965*h):] = 0
+        mask[:,:int(.025*w)] = 0; mask[:,int(.975*w):] = 0
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+        for i,(x,y,bw,bh,area) in enumerate(stats[1:],1):
+            if bw < .40*w or bh < .55*h or area/(bw*bh) > .12: continue
+            ys,xs = np.where(labels[y:y+bh,x:x+bw] == i)
+            # Both arms must be visible across the top and bottom, with a
+            # narrow crossing between them. Quantiles resist isolated noise.
+            bands = []
+            for j in range(12):
+                xx = xs[(ys >= j*bh/12)&(ys < (j+1)*bh/12)]
+                if len(xx)<8: bands.append(None); continue
+                lo,hi=np.quantile(xx,[.12,.88]); bands.append((lo,hi))
+            if any(b is None for b in bands): continue
+            widths=np.array([b[1]-b[0] for b in bands])
+            k=int(np.argmin(widths[3:9]))+3
+            if min(max(widths[:3]),max(widths[-3:])) < .40*bw: continue
+            if widths[k] > .30*bw: continue
+            left=np.array([b[0] for b in bands]); right=np.array([b[1] for b in bands])
+            if min(left[k]-left[1],right[1]-right[k],left[k]-left[10],right[10]-right[k]) < .12*bw: continue
+            return True
+    return False
+
+
+def crossed_page(page):
+    return straight_crossed_page(page) or curved_crossed_page(page)
+
+
+def orientation_score(im):
+    # Compare actual recognized word confidence, not only OSD confidence.
+    d=pytesseract.image_to_data(im,lang="vie+eng",config=f'--dpi 180 --psm 6 --tessdata-dir "{TESSDATA}"',output_type=pytesseract.Output.DICT,timeout=25)
+    words=[(str(t),float(c)) for t,c in zip(d['text'],d['conf']) if str(t).strip() and float(c)>=0]
+    good=[(t,c) for t,c in words if c>=55 and sum(ch.isalpha() for ch in t)>=2]
+    return sum(min(len(t),12)*c/100 for t,c in good),len(good)
+
+
 def suggested_rotation(page):
-    if TESSDATA is None: return None, 0.0
+    if TESSDATA is None: return None,0.0,"Thiếu Tesseract trong Cleaner"
+    im=page_image(page,2.5).convert('L')
+    angle=None; conf=0.; error=""
     try:
-        pix = page.get_pixmap(matrix=fitz.Matrix(2,2), colorspace=fitz.csGRAY, alpha=False)
-        im = Image.frombytes("L", (pix.width,pix.height), pix.samples)
-        cfg = f'--dpi 200 --tessdata-dir "{TESSDATA}"'
-        d = pytesseract.image_to_osd(im, output_type=pytesseract.Output.DICT, config=cfg, timeout=20)
-        angle, conf = int(d.get("rotate",0)) % 360, float(d.get("orientation_conf",0))
-        return (angle, conf) if angle in (0,90,180,270) and conf >= 8 else (None, conf)
-    except Exception: return None, 0.0
+        d=pytesseract.image_to_osd(im,output_type=pytesseract.Output.DICT,config=f'--dpi 180 --tessdata-dir "{TESSDATA}"',timeout=20)
+        angle=int(d.get('rotate',0))%360; conf=float(d.get('orientation_conf',0))
+        if angle in (0,90,180,270) and conf>=10: return angle,conf,"OSD"
+    except Exception as e: error=str(e)
+    try:
+        # For weak OSD, compare upright and upside-down text; consider sideways
+        # if OSD suggests it. Positive PDF rotation is clockwise.
+        angles=(0,90,180,270) if angle in (90,270) else (0,180)
+        scores=[]
+        for a in angles:
+            candidate=im if a==0 else im.rotate(-a,expand=True)
+            score,n=orientation_score(candidate)
+            scores.append((score,n,a))
+        scores.sort(reverse=True); best,n,a=scores[0]; second=scores[1][0]
+        if n>=5 and best>=12 and best>=second*1.45+5: return a, best/(second+1),"OCR đối chiếu"
+        return None,conf,"Không đủ bằng chứng hướng trang"+("; OSD: "+error[:180] if error else "")
+    except Exception as e: return None,conf,"OCR lỗi: "+str(e)[:250]+("; OSD: "+error[:150] if error else "")
 
 
 def process_pdf(src, input_root, output_root, output_name, rotate_enabled, detect_x=True, learned_auto=False):
@@ -159,18 +242,20 @@ def process_pdf(src, input_root, output_root, output_name, rotate_enabled, detec
         reasons = {p - sum(1 for b in blank if b < p-1): v for p,v in reasons.items()}
         suspicious = sorted(reasons)
         rotated = inferred = uncertain = 0
+        orientation_notes = []
         consensus = None
         if rotate_enabled in (90,180,270):
             for page in doc: page.set_rotation((page.rotation+rotate_enabled)%360); rotated += 1
             consensus=rotate_enabled
         elif rotate_enabled is True and len(doc):
             detections = [suggested_rotation(p) for p in doc]
-            known = [a for a,c in detections if a is not None]
+            known = [a for a,c,n in detections if a is not None]
             if known:
                 counts = {a:known.count(a) for a in set(known)}
                 dominant = max(counts, key=counts.get)
                 if (len(known)>=2 or len(doc)==1) and counts[dominant]/len(known)>=.90: consensus=dominant
-            for page, (angle, conf) in zip(doc, detections):
+            for index, (page, (angle, conf, method)) in enumerate(zip(doc, detections),1):
+                if angle is None: orientation_notes.append(f"Trang {index}: {method}")
                 if angle is None:
                     if consensus is not None: angle=consensus; inferred += 1
                     else: uncertain += 1; continue
@@ -181,7 +266,7 @@ def process_pdf(src, input_root, output_root, output_name, rotate_enabled, detec
           "blank_removed":len(blank),"pages_after":len(doc),"rotated":rotated,"orientation_inferred":inferred,
           "orientation_consensus":f"{consensus}°" if consensus is not None else "Không xác lập" if rotate_enabled else "Đã tắt",
           "orientation_uncertain":uncertain,"suspicious_pages":";".join(map(str,suspicious)),
-          "suspicious_count":len(suspicious),"output_file":str(output_name),"note":"; ".join(f"{k}: {v}" for k,v in reasons.items())}
+          "suspicious_count":len(suspicious),"output_file":str(output_name),"note":"; ".join([*(f"{k}: {v}" for k,v in reasons.items()), *orientation_notes])}
     finally: doc.close()
 
 
@@ -306,7 +391,7 @@ class CleanerApp:
     def __init__(self,root):
         self.root=root; root.title(f"PDF Document Cleaner {APP_VERSION} - HMDS"); root.geometry("970x720"); root.minsize(850,650)
         self.source=tk.StringVar(); self.target=tk.StringVar(); self.start_number=tk.StringVar(value="1"); self.year=tk.StringVar(value=str(datetime.now().year)); self.suffix=tk.StringVar()
-        self.rename=tk.BooleanVar(value=False); self.rotate=tk.StringVar(value="Không xoay"); self.detect_x=tk.BooleanVar(value=True); self.learned_auto=tk.BooleanVar(value=False); self.events=queue.Queue(); self.running=False; self.last_report=None; self.last_target=None
+        self.rename=tk.BooleanVar(value=False); self.rotate=tk.StringVar(value="Tự nhận diện"); self.detect_x=tk.BooleanVar(value=True); self.learned_auto=tk.BooleanVar(value=False); self.events=queue.Queue(); self.running=False; self.last_report=None; self.last_target=None
         self.build_ui(); root.after(150,self.poll_events)
 
     def build_ui(self):
@@ -349,6 +434,12 @@ class CleanerApp:
 
     def start(self):
         if self.running:return
+        if self.rotate.get()=="Tự nhận diện":
+            try:
+                if TESSDATA is None: raise RuntimeError("Không tìm thấy Tesseract trong bộ cài Cleaner.")
+                langs=pytesseract.get_languages(config=f'--tessdata-dir "{TESSDATA}"')
+                if not {"osd","vie","eng"}.issubset(langs): raise RuntimeError("Thiếu dữ liệu osd/vie/eng.")
+            except Exception as e: messagebox.showerror("Không thể nhận diện hướng",str(e));return
         try:
             start=int(self.start_number.get().strip()) if self.rename.get() else 1; year=self.year.get().strip() if self.rename.get() else "2000"; suffix=self.suffix.get().strip() if self.rename.get() else ""
             if start<1:raise ValueError("Số hồ sơ bắt đầu phải từ 1 trở lên.")
@@ -407,7 +498,7 @@ class CleanerApp:
                 e=self.events.get_nowait()
                 if e[0]=="progress":self.progress["value"]=e[1]-1;self.status.configure(text=f"Đang xử lý {e[1]}/{e[2]}: {e[3]}")
                 elif e[0]=="row":
-                    r=e[1];self.log(f"{r['status']}: {r['source_file']} → {r['output_file']} | xóa {r['blank_removed']} trang | còn {r['pages_after']} trang | nghi ngờ {r['suspicious_count']} trang | xoay {r['rotated']}")
+                    r=e[1];self.log(f"{r['status']}: {r['source_file']} → {r['output_file']} | xóa {r['blank_removed']} trang | còn {r['pages_after']} trang | nghi ngờ {r['suspicious_count']} trang | xoay {r['rotated']} | chưa xác định {r['orientation_uncertain']}")
                 elif e[0]=="done":
                     _,rows,total,report,out=e;ok=sum(r["status"]=="Thành công" for r in rows);pages=sum(int(r["pages_after"]) for r in rows if r["status"]=="Thành công");sus=sum(int(r["suspicious_count"]) for r in rows)
                     self.running=False;self.start_button.configure(state="normal");self.progress["value"]=len(rows);self.last_report=report;self.last_target=out;self.review_button.configure(state="normal")

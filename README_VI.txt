@@ -36,10 +36,14 @@ LƯU Ý AN TOÀN
 - Nên thử nghiệm trên bản sao của hồ sơ trước khi xử lý dữ liệu nghiệp vụ chính thức.
 - Tesseract OCR và dữ liệu ngôn ngữ được đóng gói offline; không cần API OCR tính phí. Cần giữ thông báo giấy phép của các thành phần bên thứ ba theo giấy phép tương ứng.
 
-Phiên bản 1.4.0:
+Phiên bản 1.4.1:
 - Mặc định giữ nguyên tên và cấu trúc thư mục tương đối. Bật đổi tên khi cần.
 - Chọn không xoay, tự nhận diện, hoặc xoay toàn lô 90/180/270 độ theo chiều kim đồng hồ.
 - Duyệt / xoay hồ sơ: chọn hồ sơ kết quả, nhập số trang, xem trước, xóa hoặc xóa và ghi nhớ; có thể xoay cả hồ sơ riêng lẻ. Không xóa trang cuối.
 - Dấu X lớn được đánh dấu chờ duyệt, không tự xóa. Mẫu chính xác có thể tự xóa khi bật tùy chọn; mẫu cũ tương tự chỉ để duyệt. Các trang thực tế có thể bỏ sót.
 - Workflow đóng gói Tesseract trong cả Cleaner và OCR; OCR riêng không thay đổi.
 - Báo cáo CSV cập nhật số trang sau duyệt; file nguồn giữ nguyên. Nên kiểm tra hồ sơ mẫu trước khi xử lý chính thức.
+
+1.4.1: Tự nhận diện là mặc định; có thể tắt để xử lý nhanh. Khi OSD không đủ tin cậy, đối chiếu OCR tiếng Việt/Anh theo hai hướng 0/180 (thêm hướng ngang nếu OSD gợi ý). Báo cáo ghi lỗi OCR và trang chưa xác định. Dấu X được phát hiện theo đường chéo dài, kể cả nét màu hoặc đứt quãng; chỉ đưa vào danh sách duyệt. Kiểm tra Tesseract đóng gói trước khi tạo installer.
+
+1.4.2: Bổ sung nhận diện dấu X cong, nhạt bằng nền cục bộ và hình dạng giao nhau. Mẫu scan thực tế đã được kiểm tra; chỉ đánh dấu chờ duyệt. Không thay đổi thuật toán xoay hoặc OCR.
