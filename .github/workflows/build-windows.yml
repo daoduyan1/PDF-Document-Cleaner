@@ -93,6 +93,20 @@ jobs:
           if ($cleanerCount -lt 2 -or $ocrCount -lt 2) { throw "Incomplete payload: Cleaner=$cleanerCount, OCR=$ocrCount" }
           Write-Host "Validated payload: Cleaner=$cleanerCount files; OCR=$ocrCount files."
 
+      - name: Verify bundled Tesseract engines
+        shell: pwsh
+        run: |
+          foreach ($root in @("dist\PDF_Document_Cleaner", "dist\OCR_Package")) {
+            $exe = Join-Path $root "_internal\tesseract\tesseract.exe"
+            $data = Join-Path $root "_internal\tesseract\tessdata"
+            if (!(Test-Path $exe)) { throw "Missing bundled Tesseract: $exe" }
+            $langs = & $exe --list-langs --tessdata-dir $data
+            if ($LASTEXITCODE -ne 0) { throw "Bundled Tesseract failed: $exe" }
+            foreach ($lang in @("vie", "eng", "osd")) {
+              if ($langs -notcontains $lang) { throw "Missing language $lang in $root" }
+            }
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --yes --no-progress
@@ -107,6 +121,6 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: PDF-Document-Cleaner-v1.4.0-Windows-Setup
+          name: PDF-Document-Cleaner-v1.4.2-Windows-Setup
           path: dist/PDF_Document_Cleaner_Setup.exe
           if-no-files-found: error
