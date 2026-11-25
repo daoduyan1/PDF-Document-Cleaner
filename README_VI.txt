@@ -1,4 +1,4 @@
-PDF DOCUMENT CLEANER 1.3.0 – HMDS
+PDF DOCUMENT CLEANER 1.3.1 – HMDS
 Tác giả: Đào Duy An – daoduyan.com
 Đơn vị phát hành: HMDS – hmds.vn
 
@@ -27,7 +27,7 @@ CÀI ĐẶT VÀ BIÊN DỊCH
 2. Upload toàn bộ nội dung vào repository daoduyan1/PDF-Document-Cleaner, giữ nguyên thư mục .github.
 3. Commit vào nhánh main.
 4. Mở Actions, chọn Build Windows installer và chạy workflow (hoặc đợi workflow tự chạy sau push).
-5. Chỉ tải artifact PDF-Document-Cleaner-v1.3.0-Windows-Setup khi workflow có dấu xanh.
+5. Chỉ tải artifact PDF-Document-Cleaner-v1.3.1-Windows-Setup khi workflow có dấu xanh.
 6. Cài PDF_Document_Cleaner_Setup.exe. Bộ cài tạo hai shortcut: PDF Document Cleaner và PDF OCR.
 
 LƯU Ý AN TOÀN

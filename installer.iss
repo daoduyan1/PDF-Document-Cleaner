@@ -1,5 +1,5 @@
 #define MyAppName "PDF Document Cleaner"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.3.1"
 #define MyAppPublisher "HMDS"
 #define MyAppURL "https://hmds.vn"
 
@@ -17,7 +17,7 @@ VersionInfoDescription=PDF Document Cleaner and separate Vietnamese OCR module
 VersionInfoCopyright=Copyright © Đào Duy An - daoduyan.com
 VersionInfoProductName=PDF Document Cleaner
 VersionInfoProductVersion={#MyAppVersion}
-VersionInfoVersion=1.3.0.0
+VersionInfoVersion=1.3.1.0
 VersionInfoOriginalFileName=PDF_Document_Cleaner.exe
 DefaultDirName={autopf}\PDF Document Cleaner
 DefaultGroupName=PDF Document Cleaner
@@ -32,7 +32,7 @@ PrivilegesRequired=admin
 
 [Files]
 Source: "dist\PDF_Document_Cleaner\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "dist\PDF_OCR\*"; DestDir: "{app}\OCR"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\OCR_Package\*"; DestDir: "{app}\OCR"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\PDF Document Cleaner"; Filename: "{app}\PDF_Document_Cleaner.exe"

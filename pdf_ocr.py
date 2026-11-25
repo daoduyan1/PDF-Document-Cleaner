@@ -8,7 +8,7 @@ import fitz
 from PIL import Image
 import pytesseract
 
-APP_VERSION="1.0.0"
+APP_VERSION="1.0.1"
 AUTHOR="Đào Duy An - daoduyan.com"
 PUBLISHER="HMDS - hmds.vn"
 LIMIT=500
