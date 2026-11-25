@@ -1,4 +1,3 @@
-
 name: Build Windows installer
 
 on:
@@ -13,7 +12,6 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -23,57 +21,92 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Verify source files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($f in @("pdf_document_cleaner.py", "pdf_ocr.py", "installer.iss", "requirements-build.txt")) {
+            if (!(Test-Path $f)) { throw "Required source file missing: $f" }
+          }
+
       - name: Install Tesseract OCR
+        shell: pwsh
         run: choco install tesseract --yes --no-progress
 
       - name: Install Python dependencies
+        shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
 
-      - name: Collect Tesseract files
+      - name: Collect Tesseract and Vietnamese language data
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $tess = "C:\Program Files\Tesseract-OCR"
-
-          if (!(Test-Path "$tess\tesseract.exe")) {
-            throw "Tesseract not found"
-          }
-
+          if (!(Test-Path "$tess\tesseract.exe")) { throw "Tesseract not found: $tess" }
           New-Item -ItemType Directory -Force -Path "tesseract\tessdata" | Out-Null
-
-          Copy-Item "$tess\tesseract.exe" "tesseract\"
-
-          Get-ChildItem "$tess" -Filter "*.dll" | ForEach-Object {
-            Copy-Item $_.FullName "tesseract\"
+          Copy-Item "$tess\tesseract.exe" "tesseract\" -Force
+          Get-ChildItem "$tess" -Filter "*.dll" -File | ForEach-Object { Copy-Item $_.FullName "tesseract\" -Force }
+          Copy-Item "$tess\tessdata\osd.traineddata" "tesseract\tessdata\" -Force
+          Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/main/vie.traineddata" -OutFile "tesseract\tessdata\vie.traineddata"
+          Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "tesseract\tessdata\eng.traineddata"
+          foreach ($f in @("tesseract\tessdata\osd.traineddata", "tesseract\tessdata\vie.traineddata", "tesseract\tessdata\eng.traineddata")) {
+            if (!(Test-Path $f) -or (Get-Item $f).Length -lt 100000) { throw "Missing or invalid Tesseract data: $f" }
           }
+          Write-Host "Tesseract payload collected."
 
-          Copy-Item "$tess\tessdata\osd.traineddata" "tesseract\tessdata\"
-
-      - name: Build application
+      - name: Build PDF Document Cleaner
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name PDF_Document_Cleaner --collect-all fitz --add-data "tesseract;tesseract" pdf_document_cleaner.py
+          $ErrorActionPreference = "Stop"
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name PDF_Document_Cleaner --distpath dist --workpath build\cleaner --specpath build\spec_cleaner --collect-all fitz pdf_document_cleaner.py
+          $cleanerExe = "dist\PDF_Document_Cleaner\PDF_Document_Cleaner.exe"
+          if (!(Test-Path $cleanerExe)) { throw "Cleaner EXE not found: $cleanerExe" }
+          Write-Host "Cleaner package files: $((Get-ChildItem 'dist\PDF_Document_Cleaner' -Recurse -File).Count)"
 
-          if (!(Test-Path "dist\PDF_Document_Cleaner\PDF_Document_Cleaner.exe")) {
-            throw "Application EXE not found"
-          }
+      - name: Build separate PDF OCR module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name PDF_OCR --distpath dist --workpath build\ocr --specpath build\spec_ocr --collect-all fitz --collect-all pytesseract --collect-all PIL --add-data "tesseract;tesseract" pdf_ocr.py
+          $ocrExe = "dist\PDF_OCR\PDF_OCR.exe"
+          if (!(Test-Path $ocrExe)) { throw "OCR EXE not found: $ocrExe" }
+          $package = "dist\OCR_Package"
+          if (Test-Path $package) { Remove-Item $package -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          Copy-Item "dist\PDF_OCR\*" $package -Recurse -Force
+          if (!(Test-Path "$package\PDF_OCR.exe")) { throw "Staged OCR EXE not found: $package" }
+          $ocrCount = (Get-ChildItem $package -Recurse -File).Count
+          if ($ocrCount -lt 2) { throw "OCR package incomplete: only $ocrCount files staged." }
+          Write-Host "OCR package ready: $ocrCount files"
+
+      - name: Validate installer inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $required = @("dist\PDF_Document_Cleaner\PDF_Document_Cleaner.exe", "dist\OCR_Package\PDF_OCR.exe")
+          foreach ($f in $required) { if (!(Test-Path $f)) { throw "Required installer input missing: $f" } }
+          $cleanerCount = (Get-ChildItem "dist\PDF_Document_Cleaner" -Recurse -File).Count
+          $ocrCount = (Get-ChildItem "dist\OCR_Package" -Recurse -File).Count
+          if ($cleanerCount -lt 2 -or $ocrCount -lt 2) { throw "Incomplete payload: Cleaner=$cleanerCount, OCR=$ocrCount" }
+          Write-Host "Validated payload: Cleaner=$cleanerCount files; OCR=$ocrCount files."
 
       - name: Install Inno Setup
+        shell: pwsh
         run: choco install innosetup --yes --no-progress
 
       - name: Build installer
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
-
-          if (!(Test-Path "dist\PDF_Document_Cleaner_Setup.exe")) {
-            throw "Installer not found"
-          }
+          if (!(Test-Path "dist\PDF_Document_Cleaner_Setup.exe")) { throw "Installer not found" }
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: PDF-Document-Cleaner-Windows-Setup
+          name: PDF-Document-Cleaner-v1.3.2-Windows-Setup
           path: dist/PDF_Document_Cleaner_Setup.exe
           if-no-files-found: error
