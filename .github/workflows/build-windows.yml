@@ -61,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name PDF_Document_Cleaner --distpath dist --workpath build\cleaner --specpath build\spec_cleaner --collect-all fitz pdf_document_cleaner.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name PDF_Document_Cleaner --distpath dist --workpath build\cleaner --specpath build\spec_cleaner --collect-all fitz --add-data "$env:GITHUB_WORKSPACE/tesseract;tesseract" pdf_document_cleaner.py
           $cleanerExe = "dist\PDF_Document_Cleaner\PDF_Document_Cleaner.exe"
           if (!(Test-Path $cleanerExe)) { throw "Cleaner EXE not found: $cleanerExe" }
           Write-Host "Cleaner package files: $((Get-ChildItem 'dist\PDF_Document_Cleaner' -Recurse -File).Count)"
@@ -107,6 +107,6 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: PDF-Document-Cleaner-v1.3.2-Windows-Setup
+          name: PDF-Document-Cleaner-v1.4.0-Windows-Setup
           path: dist/PDF_Document_Cleaner_Setup.exe
           if-no-files-found: error
