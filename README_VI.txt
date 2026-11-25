@@ -35,3 +35,11 @@ LƯU Ý AN TOÀN
 - Chức năng ghi nhớ mẫu chỉ áp dụng khi người dùng chủ động chọn xóa và ghi nhớ. Kiểm tra kỹ các kết quả đầu tiên trước khi sử dụng trên lô lớn.
 - Nên thử nghiệm trên bản sao của hồ sơ trước khi xử lý dữ liệu nghiệp vụ chính thức.
 - Tesseract OCR và dữ liệu ngôn ngữ được đóng gói offline; không cần API OCR tính phí. Cần giữ thông báo giấy phép của các thành phần bên thứ ba theo giấy phép tương ứng.
+
+Phiên bản 1.4.0:
+- Mặc định giữ nguyên tên và cấu trúc thư mục tương đối. Bật đổi tên khi cần.
+- Chọn không xoay, tự nhận diện, hoặc xoay toàn lô 90/180/270 độ theo chiều kim đồng hồ.
+- Duyệt / xoay hồ sơ: chọn hồ sơ kết quả, nhập số trang, xem trước, xóa hoặc xóa và ghi nhớ; có thể xoay cả hồ sơ riêng lẻ. Không xóa trang cuối.
+- Dấu X lớn được đánh dấu chờ duyệt, không tự xóa. Mẫu chính xác có thể tự xóa khi bật tùy chọn; mẫu cũ tương tự chỉ để duyệt. Các trang thực tế có thể bỏ sót.
+- Workflow đóng gói Tesseract trong cả Cleaner và OCR; OCR riêng không thay đổi.
+- Báo cáo CSV cập nhật số trang sau duyệt; file nguồn giữ nguyên. Nên kiểm tra hồ sơ mẫu trước khi xử lý chính thức.
