@@ -1,5 +1,5 @@
 #define MyAppName "PDF Document Cleaner"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "HMDS"
 #define MyAppURL "https://hmds.vn"
 
@@ -13,11 +13,11 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 AppCopyright=Copyright © Đào Duy An - daoduyan.com
 VersionInfoCompany=HMDS
-VersionInfoDescription=PDF Document Cleaner - Phần mềm xử lý hồ sơ PDF
+VersionInfoDescription=PDF Document Cleaner and separate Vietnamese OCR module
 VersionInfoCopyright=Copyright © Đào Duy An - daoduyan.com
 VersionInfoProductName=PDF Document Cleaner
 VersionInfoProductVersion={#MyAppVersion}
-VersionInfoVersion=1.2.0.0
+VersionInfoVersion=1.3.0.0
 VersionInfoOriginalFileName=PDF_Document_Cleaner.exe
 DefaultDirName={autopf}\PDF Document Cleaner
 DefaultGroupName=PDF Document Cleaner
@@ -32,10 +32,13 @@ PrivilegesRequired=admin
 
 [Files]
 Source: "dist\PDF_Document_Cleaner\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\PDF_OCR\*"; DestDir: "{app}\OCR"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\PDF Document Cleaner"; Filename: "{app}\PDF_Document_Cleaner.exe"
 Name: "{autodesktop}\PDF Document Cleaner"; Filename: "{app}\PDF_Document_Cleaner.exe"; Tasks: desktopicon
+Name: "{group}\PDF OCR (module riêng)"; Filename: "{app}\OCR\PDF_OCR.exe"
+Name: "{autodesktop}\PDF OCR"; Filename: "{app}\OCR\PDF_OCR.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Tạo biểu tượng ngoài màn hình Desktop"; GroupDescription: "Tùy chọn:"
