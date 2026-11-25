@@ -7,7 +7,7 @@ import fitz
 from PIL import Image, ImageChops, ImageFilter
 import pytesseract
 
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 APP_AUTHOR = "Đào Duy An"
 APP_AUTHOR_URL = "https://daoduyan.com"
 APP_PUBLISHER = "HMDS"
